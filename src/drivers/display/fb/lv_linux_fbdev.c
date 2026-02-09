@@ -17,7 +17,11 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <time.h>
+
+#if LV_LINUX_FBDEV_MMAP
+#else
 #include <errno.h>
+#endif
 
 #if LV_LINUX_FBDEV_BSD
     #include <sys/fcntl.h>
@@ -109,7 +113,8 @@ lv_display_t * lv_linux_fbdev_create(void)
     LV_ASSERT_MALLOC(dsc);
     if(dsc == NULL) return NULL;
 
-    lv_display_t * disp = lv_display_create(800, 480);
+    //lv_display_t * disp = lv_display_create(800, 480);
+    lv_display_t * disp = lv_display_create(128, 64);
     if(disp == NULL) {
         lv_free(dsc);
         return NULL;
@@ -216,6 +221,9 @@ lv_result_t lv_linux_fbdev_set_file(lv_display_t * disp, const char * file)
         case 32:
             lv_display_set_color_format(disp, LV_COLOR_FORMAT_XRGB8888);
             break;
+        case 1:
+            lv_display_set_color_format(disp, LV_COLOR_FORMAT_I1);
+            break;
         default:
             LV_LOG_WARN("Not supported color format (%d bits)", dsc->vinfo.bits_per_pixel);
             return LV_RESULT_INVALID;
@@ -224,12 +232,26 @@ lv_result_t lv_linux_fbdev_set_file(lv_display_t * disp, const char * file)
     int32_t hor_res = dsc->vinfo.xres;
     int32_t ver_res = dsc->vinfo.yres;
     int32_t width = dsc->vinfo.width;
-    uint32_t draw_buf_size = hor_res * (dsc->vinfo.bits_per_pixel >> 3);
+    uint32_t draw_buf_size;
+    /**
+     *  To adapt to single pixel display like oled ssd1309
+     * 
+     */
+    if (dsc->vinfo.bits_per_pixel == 1) {
+        draw_buf_size = hor_res / 8;
+    } else {
+        draw_buf_size = hor_res * (dsc->vinfo.bits_per_pixel >> 3);
+    }
+
     if(LV_LINUX_FBDEV_RENDER_MODE == LV_DISPLAY_RENDER_MODE_PARTIAL) {
         draw_buf_size *= LV_LINUX_FBDEV_BUFFER_SIZE;
     }
     else {
         draw_buf_size *= ver_res;
+    }
+
+    if (dsc->vinfo.bits_per_pixel == 1) {
+        draw_buf_size += 8;  // we have to add 8bytes size 
     }
 
     uint8_t * draw_buf = NULL;
@@ -315,6 +337,8 @@ static void flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * colo
         return;
     }
 #endif
+    
+    color_p += 8; // for oled display 
 
     const bool wait_for_last_flush = LV_LINUX_FBDEV_RENDER_MODE == LV_DISPLAY_RENDER_MODE_FULL;
     const bool is_last_flush = lv_display_flush_is_last(disp);
