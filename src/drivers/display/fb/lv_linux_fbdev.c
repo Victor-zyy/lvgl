@@ -338,7 +338,9 @@ static void flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * colo
     }
 #endif
     
-    color_p += 8; // for oled display 
+    if(lv_color_format_get_size(lv_display_get_color_format(disp)) == 1) {
+        color_p += 8; // for oled display 
+    }
 
     const bool wait_for_last_flush = LV_LINUX_FBDEV_RENDER_MODE == LV_DISPLAY_RENDER_MODE_FULL;
     const bool is_last_flush = lv_display_flush_is_last(disp);
